@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로봇 행동 태깅 도구</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="error-container"></div>
+    <div class="container">
+        <header>
+            <h1>🤖 로봇 행동 태깅 도구</h1>
+            <div class="upload-section">
+                <input type="file" id="imageUpload" multiple accept="image/*" style="display: none;">
+                <button id="uploadBtn" class="btn primary">이미지 시퀀스 업로드</button>
+                <span id="imageCount">0개 이미지</span>
+            </div>
+        </header>
+
+        <main>
+            <!-- 이미지 뷰어 -->
+            <div class="viewer-container">
+                <div class="image-viewer">
+                    <img id="currentImage" src="" alt="현재 프레임" style="display: none;">
+                    <div class="placeholder" id="placeholder">
+                        이미지를 업로드하여 시작하세요
+                    </div>
+                </div>
+                
+                <!-- 프레임 정보 -->
+                <div class="frame-info">
+                    <span id="frameNumber">프레임: 0 / 0</span>
+                    <span id="currentTime">시간: 0.0초</span>
+                </div>
+            </div>
+
+            <!-- 컨트롤 패널 -->
+            <div class="controls">
+                <button id="playBtn" class="btn control" disabled>▶️ 재생</button>
+                <button id="prevBtn" class="btn control" disabled>⏮️ 이전</button>
+                <button id="nextBtn" class="btn control" disabled>⏭️ 다음</button>
+                <div class="speed-control">
+                    <label>속도:</label>
+                    <select id="speedSelect">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="2">2x</option>
+                        <option value="4">4x</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 타임라인 -->
+            <div class="timeline-container">
+                <div class="timeline-header">
+                    <h3>타임라인 & 행동 태깅</h3>
+                    <button id="addTagBtn" class="btn secondary" disabled>새 태그 추가</button>
+                </div>
+                
+                <div class="timeline-wrapper">
+                    <div class="timeline" id="timeline">
+                        <div class="timeline-track" id="timelineTrack"></div>
+                        <div class="current-frame-indicator" id="frameIndicator"></div>
+                        <div class="tags-container" id="tagsContainer"></div>
+                    </div>
+                </div>
+                
+                <!-- 타임라인 눈금 -->
+                <div class="timeline-scale" id="timelineScale"></div>
+            </div>
+
+            <!-- 태그 편집 패널 -->
+            <div class="tag-panel" id="tagPanel" style="display: none;">
+                <h4>태그 편집</h4>
+                <div class="tag-form">
+                    <div class="form-group">
+                        <label>행동 이름:</label>
+                        <input type="text" id="tagName" placeholder="예: 물건 집기, 이동하기">
+                    </div>
+                    <div class="form-group">
+                        <label>시작 프레임:</label>
+                        <input type="number" id="tagStart" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>끝 프레임:</label>
+                        <input type="number" id="tagEnd" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>설명:</label>
+                        <textarea id="tagDescription" placeholder="행동에 대한 상세 설명"></textarea>
+                    </div>
+                    <div class="form-buttons">
+                        <button id="saveTagBtn" class="btn primary">저장</button>
+                        <button id="deleteTagBtn" class="btn danger">삭제</button>
+                        <button id="cancelTagBtn" class="btn secondary">취소</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 태그 목록 -->
+            <div class="tag-list">
+                <h4>태그 목록</h4>
+                <div id="tagListContainer">
+                    <p class="empty-message">아직 태그가 없습니다.</p>
+                </div>
+            </div>
+
+            <!-- 데이터 관리 -->
+            <div class="data-management">
+                <h4>데이터 관리</h4>
+                <div class="data-buttons">
+                    <button id="exportBtn" class="btn secondary" disabled>태깅 데이터 내보내기</button>
+                    <input type="file" id="importInput" accept=".json" style="display: none;">
+                    <button id="importBtn" class="btn secondary">태깅 데이터 가져오기</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 

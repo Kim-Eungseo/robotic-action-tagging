@@ -1,0 +1,506 @@
+/* 리셋 및 기본 스타일 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #1a1a1a;
+    color: #ffffff;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 헤더 */
+header {
+    background: #2d2d2d;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+header h1 {
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.upload-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#imageCount {
+    color: #999;
+    font-size: 14px;
+}
+
+/* 버튼 스타일 */
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn.primary {
+    background: #007AFF;
+    color: white;
+}
+
+.btn.primary:hover:not(:disabled) {
+    background: #0056CC;
+}
+
+.btn.secondary {
+    background: #48484a;
+    color: white;
+}
+
+.btn.secondary:hover:not(:disabled) {
+    background: #5a5a5c;
+}
+
+.btn.danger {
+    background: #FF3B30;
+    color: white;
+}
+
+.btn.danger:hover:not(:disabled) {
+    background: #D70015;
+}
+
+.btn.control {
+    background: #2d2d2d;
+    color: white;
+    border: 1px solid #444;
+}
+
+.btn.control:hover:not(:disabled) {
+    background: #3d3d3d;
+}
+
+/* 이미지 뷰어 */
+.viewer-container {
+    background: #2d2d2d;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.image-viewer {
+    width: 100%;
+    height: 400px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+#currentImage {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.placeholder {
+    color: #999;
+    font-size: 18px;
+    text-align: center;
+}
+
+.frame-info {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 15px;
+    color: #999;
+    font-size: 14px;
+}
+
+/* 컨트롤 패널 */
+.controls {
+    background: #2d2d2d;
+    padding: 15px 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.speed-control {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.speed-control label {
+    color: #999;
+    font-size: 14px;
+}
+
+.speed-control select {
+    background: #1a1a1a;
+    color: white;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 14px;
+}
+
+/* 타임라인 컨테이너 */
+.timeline-container {
+    background: #2d2d2d;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.timeline-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* 타임라인 */
+.timeline-wrapper {
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.timeline {
+    height: 80px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    position: relative;
+    border: 1px solid #444;
+    overflow: hidden;
+}
+
+.timeline-track {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to right, #333 0%, #333 100%);
+    position: relative;
+}
+
+.current-frame-indicator {
+    position: absolute;
+    top: 0;
+    width: 3px;
+    height: 100%;
+    background: #FF453A;
+    z-index: 20;
+    transition: left 0.1s ease;
+    box-shadow: 0 0 8px rgba(255, 69, 58, 0.5);
+}
+
+.tags-container {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+}
+
+.tag-segment {
+    position: absolute;
+    height: 100%;
+    background: rgba(0, 122, 255, 0.3);
+    border: 2px solid #007AFF;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    min-width: 30px;
+}
+
+.tag-segment:hover {
+    background: rgba(0, 122, 255, 0.5);
+    transform: translateY(-2px);
+}
+
+.tag-segment.selected {
+    border-color: #FF453A;
+    background: rgba(255, 69, 58, 0.3);
+}
+
+.tag-label {
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 타임라인 눈금 */
+.timeline-scale {
+    height: 20px;
+    position: relative;
+    margin-top: 5px;
+}
+
+.scale-mark {
+    position: absolute;
+    width: 1px;
+    height: 10px;
+    background: #666;
+    top: 0;
+}
+
+.scale-label {
+    position: absolute;
+    color: #999;
+    font-size: 10px;
+    top: 12px;
+    transform: translateX(-50%);
+}
+
+/* 태그 편집 패널 */
+.tag-panel {
+    background: #2d2d2d;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.tag-panel h4 {
+    margin-bottom: 20px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.tag-form {
+    display: grid;
+    gap: 15px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-group label {
+    color: #999;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group textarea {
+    background: #1a1a1a;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: white;
+    font-size: 14px;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #007AFF;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.form-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+/* 태그 목록 */
+.tag-list {
+    background: #2d2d2d;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.tag-list h4 {
+    margin-bottom: 15px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.tag-item {
+    background: #1a1a1a;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid #444;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tag-item:hover {
+    border-color: #007AFF;
+    background: #222;
+}
+
+.tag-item.selected {
+    border-color: #FF453A;
+    background: rgba(255, 69, 58, 0.1);
+}
+
+.tag-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.tag-item-name {
+    font-weight: 600;
+    color: #007AFF;
+}
+
+.tag-item-frames {
+    color: #999;
+    font-size: 12px;
+}
+
+.tag-item-description {
+    color: #ccc;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.empty-message {
+    color: #999;
+    text-align: center;
+    font-style: italic;
+}
+
+/* 데이터 관리 */
+.data-management {
+    background: #2d2d2d;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.data-management h4 {
+    margin-bottom: 15px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.data-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    header {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+    }
+    
+    .controls {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .speed-control {
+        margin-left: 0;
+    }
+    
+    .form-buttons {
+        flex-direction: column;
+    }
+    
+    .data-buttons {
+        flex-direction: column;
+    }
+} 
+
+.error-message {
+    background-color: #ff5252;
+    color: white;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    font-weight: bold;
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    min-width: 300px;
+    text-align: center;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translate(-50%, -100%);
+        opacity: 0;
+    }
+    to {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+}
+
+.dataset-error {
+    background-color: #ff5252;
+    color: white;
+    padding: 0.5rem 1rem;
+    margin: 0.5rem 0;
+    border-radius: 4px;
+    font-weight: 500;
+    display: none;
+} 
