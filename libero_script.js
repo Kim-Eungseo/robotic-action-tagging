@@ -13,6 +13,7 @@ class LiberoActionTagger {
         this.liberoInfo = null;
         this.episodes = [];
         this.tasks = [];
+        this.tagTemplates = this.loadTagTemplates();
 
         this.initializeElements();
         this.bindEvents();
@@ -70,6 +71,8 @@ class LiberoActionTagger {
 
             // 태그 편집
             tagPanel: document.getElementById('tagPanel'),
+            tagTemplatesSection: document.getElementById('tagTemplatesSection'),
+            tagTemplates: document.getElementById('tagTemplates'),
             tagName: document.getElementById('tagName'),
             tagStart: document.getElementById('tagStart'),
             tagEnd: document.getElementById('tagEnd'),
@@ -302,7 +305,11 @@ class LiberoActionTagger {
             // 에피소드 데이터 로드
             this.showLoading();
             
-            const response = await fetch(`${this.apiBaseUrl}/episode/${episodeIndex}?frame_count=200`);
+            // 에피소드 목록에서 실제 frame_count 찾기
+            const selectedEpisode = this.episodes.find(ep => ep.episode_index === episodeIndex);
+            const maxFrames = selectedEpisode ? selectedEpisode.frame_count : 500;
+            
+            const response = await fetch(`${this.apiBaseUrl}/episode/${episodeIndex}?frame_count=${maxFrames}`);
             if (!response.ok) {
                 throw new Error(`에피소드 로드 실패: ${response.status}`);
             }
@@ -338,8 +345,9 @@ class LiberoActionTagger {
         this.elements.wristCamera.style.display = 'block';
         this.elements.wristPlaceholder.style.display = 'none';
 
-        // 프레임 정보 업데이트
-        this.elements.frameNumber.textContent = `프레임: ${this.currentFrameIndex + 1} / ${this.currentEpisode.frames.length}`;
+        // 프레임 정보 업데이트 (전체 에피소드 길이 표시)
+        const totalFramesInEpisode = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
+        this.elements.frameNumber.textContent = `프레임: ${this.currentFrameIndex + 1} / ${totalFramesInEpisode}`;
         this.elements.currentTime.textContent = `시간: ${currentFrame.timestamp.toFixed(2)}초`;
         this.elements.episodeInfo.textContent = `에피소드: ${currentFrame.episode_index}, 태스크: ${currentFrame.task_index}`;
 
@@ -374,7 +382,9 @@ class LiberoActionTagger {
     updateFrameIndicator() {
         if (!this.currentEpisode || this.currentEpisode.frames.length === 0) return;
         
-        const percentage = (this.currentFrameIndex / (this.currentEpisode.frames.length - 1)) * 100;
+        // 전체 에피소드 길이를 기준으로 인디케이터 위치 계산
+        const totalFrames = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
+        const percentage = (this.currentFrameIndex / (totalFrames - 1)) * 100;
         this.elements.frameIndicator.style.left = `${percentage}%`;
     }
 
@@ -382,7 +392,8 @@ class LiberoActionTagger {
         if (!this.currentEpisode) return;
 
         this.elements.timelineScale.innerHTML = '';
-        const totalFrames = this.currentEpisode.frames.length;
+        // 전체 에피소드 길이를 기준으로 스케일 생성
+        const totalFrames = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
         const scaleStep = Math.max(1, Math.floor(totalFrames / 10));
 
         for (let i = 0; i < totalFrames; i += scaleStep) {
@@ -405,7 +416,9 @@ class LiberoActionTagger {
         this.elements.prevBtn.disabled = false;
         this.elements.nextBtn.disabled = false;
         this.elements.frameInput.disabled = false;
-        this.elements.frameInput.max = this.currentEpisode.frames.length - 1;
+        // 전체 에피소드 길이를 기준으로 max 설정
+        const totalFrames = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
+        this.elements.frameInput.max = totalFrames - 1;
         this.elements.goToFrameBtn.disabled = false;
         this.elements.addTagBtn.disabled = false;
         this.elements.exportBtn.disabled = false;
@@ -428,7 +441,11 @@ class LiberoActionTagger {
         
         const interval = 1000 / (this.fps * this.playSpeed);
         this.playInterval = setInterval(() => {
-            if (this.currentFrameIndex < this.currentEpisode.frames.length - 1) {
+            // 전체 에피소드 길이를 기준으로 재생
+            const totalFrames = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
+            const maxLoadedFrame = this.currentEpisode.frames.length - 1;
+            
+            if (this.currentFrameIndex < Math.min(totalFrames - 1, maxLoadedFrame)) {
                 this.currentFrameIndex++;
                 this.updateUI();
             } else {
@@ -455,17 +472,33 @@ class LiberoActionTagger {
     }
 
     nextFrame() {
-        if (this.currentEpisode && this.currentFrameIndex < this.currentEpisode.frames.length - 1) {
-            this.currentFrameIndex++;
-            this.updateUI();
+        if (this.currentEpisode) {
+            // 전체 에피소드 길이를 기준으로 다음 프레임 이동
+            const totalFrames = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
+            const maxLoadedFrame = this.currentEpisode.frames.length - 1;
+            
+            if (this.currentFrameIndex < Math.min(totalFrames - 1, maxLoadedFrame)) {
+                this.currentFrameIndex++;
+                this.updateUI();
+            }
         }
     }
 
     goToFrame() {
         const frameNum = parseInt(this.elements.frameInput.value);
-        if (this.currentEpisode && frameNum >= 0 && frameNum < this.currentEpisode.frames.length) {
-            this.currentFrameIndex = frameNum;
-            this.updateUI();
+        if (this.currentEpisode && frameNum >= 0) {
+            // 전체 에피소드 길이를 기준으로 프레임 이동
+            const totalFrames = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
+            const maxLoadedFrame = this.currentEpisode.frames.length - 1;
+            
+            if (frameNum < totalFrames && frameNum <= maxLoadedFrame) {
+                this.currentFrameIndex = frameNum;
+                this.updateUI();
+            } else if (frameNum >= totalFrames) {
+                alert(`프레임 번호는 0부터 ${totalFrames - 1}까지 입력 가능합니다.`);
+            } else if (frameNum > maxLoadedFrame) {
+                alert(`현재 ${maxLoadedFrame + 1}개 프레임만 로드되었습니다. 프레임 ${frameNum}은 아직 로드되지 않았습니다.`);
+            }
         }
     }
 
@@ -475,8 +508,12 @@ class LiberoActionTagger {
         const rect = this.elements.timeline.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const percentage = clickX / rect.width;
-        const newFrame = Math.floor(percentage * (this.currentEpisode.frames.length - 1));
         
+        // 전체 에피소드 길이를 기준으로 프레임 계산
+        const totalFrames = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
+        const newFrame = Math.floor(percentage * (totalFrames - 1));
+        
+        // 현재 로드된 프레임 범위 내에서만 이동 가능
         this.currentFrameIndex = Math.max(0, Math.min(newFrame, this.currentEpisode.frames.length - 1));
         this.updateUI();
     }
@@ -485,7 +522,9 @@ class LiberoActionTagger {
         if (!this.currentEpisode) return;
 
         const startFrame = this.currentFrameIndex;
-        const endFrame = Math.min(startFrame + Math.floor(this.fps * 2), this.currentEpisode.frames.length - 1);
+        // 전체 에피소드 길이를 기준으로 태그 범위 설정
+        const totalFrames = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
+        const endFrame = Math.min(startFrame + Math.floor(this.fps * 2), totalFrames - 1);
 
         this.editTag({
             id: Date.now(),
@@ -494,6 +533,93 @@ class LiberoActionTagger {
             endFrame: endFrame,
             description: ''
         }, true);
+    }
+
+    // 태그 템플릿 관리 메서드들
+    loadTagTemplates() {
+        try {
+            const stored = localStorage.getItem('libero_tag_templates');
+            return stored ? JSON.parse(stored) : {};
+        } catch (error) {
+            console.error('태그 템플릿 로드 실패:', error);
+            return {};
+        }
+    }
+
+    saveTagTemplates() {
+        try {
+            localStorage.setItem('libero_tag_templates', JSON.stringify(this.tagTemplates));
+        } catch (error) {
+            console.error('태그 템플릿 저장 실패:', error);
+        }
+    }
+
+    addTagTemplate(name, description = '') {
+        if (!name.trim()) return;
+        
+        const key = name.trim();
+        if (!this.tagTemplates[key]) {
+            this.tagTemplates[key] = {
+                name: key,
+                description: description,
+                usageCount: 0,
+                lastUsed: new Date().toISOString()
+            };
+        }
+        
+        this.tagTemplates[key].usageCount++;
+        this.tagTemplates[key].lastUsed = new Date().toISOString();
+        this.saveTagTemplates();
+        this.displayTagTemplates();
+    }
+
+    displayTagTemplates() {
+        const container = this.elements.tagTemplates;
+        
+        // 템플릿이 없는 경우
+        const templateKeys = Object.keys(this.tagTemplates);
+        if (templateKeys.length === 0) {
+            container.innerHTML = '<p class="empty-templates">저장된 태그가 없습니다.</p>';
+            return;
+        }
+
+        // 사용 횟수 순으로 정렬
+        const sortedTemplates = templateKeys
+            .map(key => this.tagTemplates[key])
+            .sort((a, b) => b.usageCount - a.usageCount);
+
+        container.innerHTML = '';
+        
+        sortedTemplates.forEach(template => {
+            const templateElement = document.createElement('div');
+            templateElement.className = 'tag-template-item';
+            templateElement.innerHTML = `
+                <span class="template-name">${template.name}</span>
+                <span class="usage-count">${template.usageCount}</span>
+            `;
+            
+            templateElement.addEventListener('click', () => {
+                this.applyTagTemplate(template);
+            });
+            
+            container.appendChild(templateElement);
+        });
+    }
+
+    applyTagTemplate(template) {
+        if (!this.currentEpisode) return;
+
+        const startFrame = this.currentFrameIndex;
+        const endFrame = Math.min(startFrame + Math.floor(this.fps * 2), this.currentEpisode.frames.length - 1);
+
+        // 템플릿을 현재 프레임에 적용
+        this.elements.tagName.value = template.name;
+        this.elements.tagStart.value = startFrame;
+        this.elements.tagEnd.value = endFrame;
+        this.elements.tagDescription.value = template.description || '';
+
+        // 사용 횟수 증가
+        this.addTagTemplate(template.name, template.description);
     }
 
     editTag(tag, isNew = false) {
@@ -506,11 +632,17 @@ class LiberoActionTagger {
         this.elements.tagDescription.value = tag.description;
         
         if (this.currentEpisode) {
-            this.elements.tagStart.max = this.currentEpisode.frames.length - 1;
-            this.elements.tagEnd.max = this.currentEpisode.frames.length - 1;
+            // 전체 에피소드 길이를 기준으로 태그 편집 범위 설정
+            const totalFrames = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
+            this.elements.tagStart.max = totalFrames - 1;
+            this.elements.tagEnd.max = totalFrames - 1;
         }
         
         this.elements.deleteTagBtn.style.display = isNew ? 'none' : 'inline-flex';
+        
+        // 태그 템플릿 표시
+        this.displayTagTemplates();
+        
         this.elements.tagName.focus();
     }
 
@@ -540,6 +672,9 @@ class LiberoActionTagger {
             this.tags.push(this.selectedTag);
         }
 
+        // 태그 템플릿에 추가
+        this.addTagTemplate(name, this.selectedTag.description);
+
         this.updateTagsDisplay();
         this.updateTagsList();
         this.cancelTagEdit();
@@ -566,13 +701,16 @@ class LiberoActionTagger {
 
         this.elements.tagsContainer.innerHTML = '';
         
+        // 전체 에피소드 길이를 기준으로 태그 위치 계산
+        const totalFrames = this.currentEpisode.metadata?.total_frames_in_episode || this.currentEpisode.frames.length;
+        
         this.tags.forEach(tag => {
             const tagElement = document.createElement('div');
             tagElement.className = 'tag-segment';
             tagElement.setAttribute('data-tag-id', tag.id);
             
-            const startPercent = (tag.startFrame / (this.currentEpisode.frames.length - 1)) * 100;
-            const endPercent = (tag.endFrame / (this.currentEpisode.frames.length - 1)) * 100;
+            const startPercent = (tag.startFrame / (totalFrames - 1)) * 100;
+            const endPercent = (tag.endFrame / (totalFrames - 1)) * 100;
             
             tagElement.style.left = `${startPercent}%`;
             tagElement.style.width = `${endPercent - startPercent}%`;

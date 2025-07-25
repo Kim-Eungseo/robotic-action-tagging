@@ -90,18 +90,29 @@ async def startup_event():
 
     # 실제 형식을 맞춘 향상된 더미 데이터 생성
     try:
-        logger.info("🎭 실제 Libero 형식을 맞춘 향상된 더미 데이터 생성 중...")
-        
-        # 실제 Libero 데이터셋 스키마 시뮬레이션
-        libero_dataset = "enhanced_dummy"  # 더미 데이터 플래그
-        
-        logger.info("✅ 향상된 더미 Libero 데이터 준비 완료!")
-        logger.info("📋 실제 스키마: ['image', 'wrist_image', 'state', 'actions', 'timestamp', 'frame_index', 'episode_index', 'index', 'task_index']")
-        
-        dataset_load_error = None
+        data_path = "./data"
+        parquet_files = [os.path.join(data_path, f) for f in os.listdir(data_path) if f.startswith("libero_batch_") and f.endswith(".parquet")]
+
+        if parquet_files:
+            logger.info(f"💾 {len(parquet_files)}개의 Parquet 파일 로딩 중...")
+            # scan_parquet을 사용하여 메모리 효율적으로 여러 파일 처리
+            libero_df = pl.scan_parquet(parquet_files).collect()
+            logger.info("✅ Parquet 파일 로딩 완료!")
+            logger.info(f"📊 로드된 데이터프레임 정보: {libero_df.shape}")
+            logger.info(f"첫 5개 행:\n{libero_df.head()}")
+            
+            libero_dataset = "polars_dataframe"
+            dataset_load_error = None
+        else:
+            logger.warning("⚠️ Parquet 파일을 찾을 수 없습니다. 더미 데이터 모드로 전환합니다.")
+            libero_dataset = "enhanced_dummy" # 더미 데이터 플래그
+            libero_df = None
+            dataset_load_error = "No parquet files found in backend/data"
             
     except Exception as e:
-        logger.warning(f"⚠️  더미 데이터 생성 실패: {e}")
+        logger.error(f"❌ 데이터셋 로딩 실패: {e}")
+        logger.error(f"스택트레이스:\n{traceback.format_exc()}")
+        libero_df = None
         libero_dataset = None
         dataset_load_error = str(e)
 
@@ -472,35 +483,33 @@ async def get_libero_info():
 async def get_tasks():
     """사용 가능한 태스크 목록 반환"""
     try:
-        if libero_dataset is None:
+        if libero_df is None:
             # 하드코딩된 태스크 정보
+            logger.info("📋 더미 데이터에서 태스크 정보 생성 중...")
             return [
                 {"task_index": i, "episode_count": 42, "description": f"Task {i}"}
                 for i in range(40)
             ]
 
-        logger.info("📋 향상된 더미 데이터에서 태스크 정보 생성 중...")
+        logger.info("📋 Polars 데이터프레임에서 태스크 정보 집계 중...")
 
-        # 실제 Libero 태스크 분포를 시뮬레이션
-        real_libero_tasks = [
-            {"task_index": 0, "name": "pick_up_the_black_bowl_on_top_of_the_cabinet", "episode_count": 45},
-            {"task_index": 1, "name": "put_the_black_bowl_on_top_of_the_counter", "episode_count": 43},
-            {"task_index": 2, "name": "put_the_wine_bottle_on_top_of_the_cabinet", "episode_count": 42},
-            {"task_index": 3, "name": "put_the_gray_bowl_on_the_stove", "episode_count": 41},
-            {"task_index": 4, "name": "put_the_bowl_on_the_stove", "episode_count": 44},
-        ]
+        # task_index를 기준으로 그룹화하여 정보 집계
+        task_info_df = libero_df.group_by("task_index").agg(
+            pl.n_unique("episode_index").alias("episode_count"),
+            pl.count().alias("frame_count")
+        ).sort("task_index")
 
         tasks = []
-        for task_info in real_libero_tasks:
+        for row in task_info_df.to_dicts():
             tasks.append({
-                "task_index": task_info["task_index"],
-                "episode_count": task_info["episode_count"],
-                "frame_count": task_info["episode_count"] * 162,  # 평균 162 프레임/에피소드
-                "description": task_info["name"],
-                "real_libero_task": True  # 실제 Libero 태스크임을 표시
+                "task_index": row["task_index"],
+                "episode_count": row["episode_count"],
+                "frame_count": row["frame_count"],
+                "description": f"Task {row['task_index']}",  # Parquet에 설명이 없으므로 생성
+                "real_libero_task": True
             })
 
-        logger.info(f"✅ {len(tasks)}개 실제 Libero 태스크 정보 생성 완료")
+        logger.info(f"✅ {len(tasks)}개 태스크 정보 집계 완료")
         return tasks
 
     except Exception as e:
@@ -512,53 +521,52 @@ async def get_tasks():
 async def get_episodes_list(task_index: Optional[int] = None, limit: int = 50):
     """에피소드 목록 반환"""
     try:
-        if libero_dataset is None:
-            # 하드코딩된 에피소드 목록
+        if libero_df is None:
+            # 하드코딩된 에피소드 목록 (get_episode와 일치하도록 수정)
             episodes = []
             for i in range(min(limit, 100)):
+                frame_count = 120 + (i % 80)  # get_episode와 동일한 계산
                 episodes.append(
                     {
                         "episode_index": i,
                         "task_index": i % 40,
-                        "frame_count": 160 + (i % 50),
+                        "frame_count": frame_count,
                         "start_timestamp": 0.0,
-                        "end_timestamp": 16.0 + (i % 5),
+                        "end_timestamp": frame_count * 0.1,  # 10 FPS 기준
                     }
                 )
             return episodes
 
         logger.info(
-            f"📋 향상된 더미 데이터에서 에피소드 목록 생성 중... (task_index: {task_index}, limit: {limit})"
+            f"📋 Polars 데이터프레임에서 에피소드 목록 집계 중... (task_index: {task_index}, limit: {limit})"
         )
 
-        # 실제 Libero 에피소드 구조 시뮬레이션
+        # 에피소드별 통계 집계
+        query = libero_df.group_by("episode_index").agg([
+            pl.n_unique("frame_index").alias("frame_count"),
+            pl.first("task_index").alias("task_index"),
+            pl.min("timestamp").alias("start_timestamp"),
+            pl.max("timestamp").alias("end_timestamp")
+        ]).sort("episode_index")
+
+        # 태스크 필터링
+        if task_index is not None:
+            query = query.filter(pl.col("task_index") == task_index)
+
+        # 결과 제한
+        episodes_df = query.head(limit)
+        
         episodes = []
-        episode_count = 0
-        
-        for ep_idx in range(0, min(limit, 100)):  # 최대 100개 에피소드
-            # 태스크 필터링
-            current_task = ep_idx % 5 if task_index is None else task_index
-            if task_index is not None and current_task != task_index:
-                continue
-                
-            # 실제 Libero 에피소드 길이 시뮬레이션 (100-200 프레임)
-            frame_count = 120 + (ep_idx % 80)  # 120-200 프레임
-            duration = frame_count * 0.1  # 10 FPS
-            
+        for row in episodes_df.to_dicts():
             episodes.append({
-                "episode_index": ep_idx,
-                "task_index": current_task,
-                "frame_count": frame_count,
-                "start_timestamp": 0.0,
-                "end_timestamp": duration,
-                "enhanced_dummy": True  # 향상된 더미 데이터임을 표시
+                "episode_index": row["episode_index"],
+                "task_index": row["task_index"],
+                "frame_count": row["frame_count"],
+                "start_timestamp": row["start_timestamp"],
+                "end_timestamp": row["end_timestamp"],
             })
-            
-            episode_count += 1
-            if episode_count >= limit:
-                break
         
-        logger.info(f"✅ {len(episodes)}개 실제 형식 에피소드 정보 생성 완료")
+        logger.info(f"✅ {len(episodes)}개 실제 에피소드 정보 집계 완료")
         return episodes
 
     except Exception as e:
@@ -569,7 +577,7 @@ async def get_episodes_list(task_index: Optional[int] = None, limit: int = 50):
 
 
 @app.get("/api/libero/episode/{episode_index}")
-async def get_episode(episode_index: int, start_frame: int = 0, frame_count: int = 100):
+async def get_episode(episode_index: int, start_frame: int = 0, frame_count: int = 500):
     """특정 에피소드의 프레임 데이터 반환"""
     try:
         logger.info(
@@ -584,12 +592,20 @@ async def get_episode(episode_index: int, start_frame: int = 0, frame_count: int
             logger.info(f"✅ 캐시에서 에피소드 {episode_index} 반환")
             return episode_cache[cache_key]
 
-        if libero_dataset is None:
+        if libero_df is None:
             logger.info("🔧 더미 데이터로 응답 생성 중...")
 
-            # 더미 데이터로 응답 (기존 코드와 동일)
+            # 에피소드 목록과 일치하는 프레임 개수 계산
+            episode_total_frames = 120 + (episode_index % 80)  # 120-200 프레임
+            
+            # 더미 데이터로 응답
             frames = []
-            total_frames = min(frame_count, 50)
+            # 요청된 범위 내에서 실제 에피소드 길이만큼 생성
+            actual_frame_count = min(frame_count, episode_total_frames - start_frame)
+            if actual_frame_count <= 0:
+                actual_frame_count = 0
+            
+            total_frames = actual_frame_count
 
             for i in range(total_frames):
                 logger.debug(f"더미 프레임 {i}/{total_frames} 생성 중...")
@@ -636,7 +652,7 @@ async def get_episode(episode_index: int, start_frame: int = 0, frame_count: int
                 "task_index": episode_index % 40,
                 "total_frames": total_frames,
                 "metadata": {
-                    "total_frames_in_episode": total_frames,
+                    "total_frames_in_episode": episode_total_frames,  # 에피소드의 실제 총 프레임 수
                     "returned_frames": len(frames),
                     "start_frame": start_frame,
                     "end_frame": start_frame + total_frames,

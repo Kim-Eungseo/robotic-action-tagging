@@ -1,3 +1,4 @@
 *.pyc
 *.parquet
 backend/data/*
+backend.log
