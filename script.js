@@ -1,4 +1,4 @@
-class RobotActionTagger {
+class RobotActionTaggerWithDatasets {
     constructor() {
         this.images = [];
         this.currentFrame = 0;
@@ -7,19 +7,44 @@ class RobotActionTagger {
         this.playSpeed = 1;
         this.tags = [];
         this.selectedTag = null;
-        this.fps = 10; // 기본 프레임 레이트
+        this.fps = 10;
+        this.currentMode = 'local'; // 'local' or 'dataset'
+        this.currentDataset = null;
+        this.currentSequence = null;
+        this.sessionId = this.generateSessionId();
+        this.apiBaseUrl = 'http://localhost:8001/api';
 
         this.initializeElements();
         this.bindEvents();
     }
 
+    generateSessionId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    }
+
     initializeElements() {
-        // DOM 요소들
+        // 기존 DOM 요소들
         this.elements = {
-            // 업로드 관련
+            // 모드 전환
+            localModeBtn: document.getElementById('localModeBtn'),
+            datasetModeBtn: document.getElementById('datasetModeBtn'),
+            localMode: document.getElementById('localMode'),
+            datasetMode: document.getElementById('datasetMode'),
+            
+            // 로컬 업로드 관련
             imageUpload: document.getElementById('imageUpload'),
             uploadBtn: document.getElementById('uploadBtn'),
             imageCount: document.getElementById('imageCount'),
+            
+            // 데이터셋 관련
+            datasetName: document.getElementById('datasetName'),
+            datasetSplit: document.getElementById('datasetSplit'),
+            loadDatasetBtn: document.getElementById('loadDatasetBtn'),
+            datasetInfo: document.getElementById('datasetInfo'),
+            datasetMeta: document.getElementById('datasetMeta'),
+            sequenceBrowser: document.getElementById('sequenceBrowser'),
+            datasetError: document.getElementById('datasetError'),
+            datasetMetaInfo: document.getElementById('datasetMetaInfo'),
             
             // 이미지 뷰어
             currentImage: document.getElementById('currentImage'),
@@ -57,18 +82,33 @@ class RobotActionTagger {
             // 데이터 관리
             exportBtn: document.getElementById('exportBtn'),
             importBtn: document.getElementById('importBtn'),
-            importInput: document.getElementById('importInput')
+            importInput: document.getElementById('importInput'),
+            saveToServerBtn: document.getElementById('saveToServerBtn')
         };
     }
 
     bindEvents() {
-        // 업로드 이벤트
+        // 모드 전환 이벤트
+        this.elements.localModeBtn.addEventListener('click', () => {
+            this.switchMode('local');
+        });
+
+        this.elements.datasetModeBtn.addEventListener('click', () => {
+            this.switchMode('dataset');
+        });
+
+        // 로컬 업로드 이벤트
         this.elements.uploadBtn.addEventListener('click', () => {
             this.elements.imageUpload.click();
         });
 
         this.elements.imageUpload.addEventListener('change', (e) => {
             this.handleImageUpload(e.target.files);
+        });
+
+        // 데이터셋 이벤트
+        this.elements.loadDatasetBtn.addEventListener('click', () => {
+            this.loadDataset();
         });
 
         // 컨트롤 이벤트
@@ -123,22 +163,269 @@ class RobotActionTagger {
             this.importData(e.target.files[0]);
         });
 
+        this.elements.saveToServerBtn.addEventListener('click', () => {
+            this.saveToServer();
+        });
+
         // 키보드 이벤트
         document.addEventListener('keydown', (e) => {
             this.handleKeyboard(e);
         });
     }
 
+    switchMode(mode) {
+        this.currentMode = mode;
+        
+        if (mode === 'local') {
+            this.elements.localModeBtn.classList.add('active');
+            this.elements.datasetModeBtn.classList.remove('active');
+            this.elements.localMode.style.display = 'block';
+            this.elements.datasetMode.style.display = 'none';
+        } else {
+            this.elements.localModeBtn.classList.remove('active');
+            this.elements.datasetModeBtn.classList.add('active');
+            this.elements.localMode.style.display = 'none';
+            this.elements.datasetMode.style.display = 'block';
+        }
+    }
+
+    async loadDataset() {
+        const datasetName = this.elements.datasetName.value.trim();
+        if (!datasetName) {
+            this.showError('데이터셋 이름을 입력해주세요.');
+            return;
+        }
+
+        try {
+            this.elements.loadDatasetBtn.textContent = '로딩 중...';
+            this.elements.loadDatasetBtn.disabled = true;
+            this.hideError();
+
+            // 데이터셋 정보 가져오기
+            const response = await fetch(`${this.apiBaseUrl}/datasets/${encodeURIComponent(datasetName)}/info`);
+            if (!response.ok) {
+                throw new Error(`데이터셋 로드 실패: ${response.status}`);
+            }
+
+            const datasetInfo = await response.json();
+            this.currentDataset = datasetInfo;
+
+            // Split 옵션 업데이트
+            this.updateSplitOptions(datasetInfo.splits);
+            
+            // 데이터셋 메타데이터 표시
+            this.displayDatasetMeta(datasetInfo);
+            
+            // 첫 번째 split 자동 선택
+            if (datasetInfo.splits.length > 0) {
+                this.elements.datasetSplit.value = datasetInfo.splits[0];
+                await this.loadSequences(datasetName, datasetInfo.splits[0]);
+            }
+
+        } catch (error) {
+            this.showError(`데이터셋 로드 중 오류 발생: ${error.message}`);
+        } finally {
+            this.elements.loadDatasetBtn.textContent = '데이터셋 로드';
+            this.elements.loadDatasetBtn.disabled = false;
+        }
+    }
+
+    updateSplitOptions(splits) {
+        this.elements.datasetSplit.innerHTML = '<option value="">Split 선택</option>';
+        splits.forEach(split => {
+            const option = document.createElement('option');
+            option.value = split;
+            option.textContent = split;
+            this.elements.datasetSplit.appendChild(option);
+        });
+
+        // Split 변경 이벤트 추가
+        this.elements.datasetSplit.onchange = () => {
+            const selectedSplit = this.elements.datasetSplit.value;
+            if (selectedSplit && this.currentDataset) {
+                this.loadSequences(this.currentDataset.name, selectedSplit);
+            }
+        };
+    }
+
+    displayDatasetMeta(datasetInfo) {
+        this.elements.datasetMeta.innerHTML = '';
+        
+        const metaItems = [
+            { label: '데이터셋', value: datasetInfo.name },
+            { label: 'Splits', value: datasetInfo.splits.join(', ') },
+            { label: '총 행 수', value: Object.values(datasetInfo.num_rows).reduce((a, b) => a + b, 0) }
+        ];
+
+        metaItems.forEach(item => {
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'meta-item';
+            metaDiv.innerHTML = `
+                <div class="meta-label">${item.label}</div>
+                <div class="meta-value">${item.value}</div>
+            `;
+            this.elements.datasetMeta.appendChild(metaDiv);
+        });
+
+        this.elements.datasetInfo.classList.add('visible');
+    }
+
+    async loadSequences(datasetName, split) {
+        try {
+            this.elements.sequenceBrowser.innerHTML = '<div class="loading">시퀀스 로딩 중...</div>';
+            
+            // 처음 10개 시퀀스 로드
+            const maxSequences = 20;
+            this.elements.sequenceBrowser.innerHTML = '';
+
+            for (let i = 0; i < maxSequences; i++) {
+                try {
+                    const sequenceDiv = document.createElement('div');
+                    sequenceDiv.className = 'sequence-item';
+                    sequenceDiv.innerHTML = `
+                        <div class="sequence-thumb">로딩 중...</div>
+                        <div class="sequence-index">시퀀스 ${i}</div>
+                    `;
+                    
+                    sequenceDiv.addEventListener('click', () => {
+                        this.selectSequence(datasetName, split, i);
+                    });
+                    
+                    this.elements.sequenceBrowser.appendChild(sequenceDiv);
+
+                    // 비동기로 썸네일 로드
+                    this.loadSequenceThumbnail(datasetName, split, i, sequenceDiv);
+                } catch (error) {
+                    // 해당 인덱스에 데이터가 없으면 중단
+                    break;
+                }
+            }
+
+        } catch (error) {
+            this.elements.sequenceBrowser.innerHTML = `<div class="error">시퀀스 로드 실패: ${error.message}</div>`;
+        }
+    }
+
+    async loadSequenceThumbnail(datasetName, split, index, sequenceDiv) {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/datasets/${encodeURIComponent(datasetName)}/${split}/sequence/${index}`);
+            if (!response.ok) return;
+
+            const sequenceData = await response.json();
+            if (sequenceData.images && sequenceData.images.length > 0) {
+                const thumb = sequenceDiv.querySelector('.sequence-thumb');
+                thumb.innerHTML = `<img src="data:image/png;base64,${sequenceData.images[0]}" style="max-width: 100%; max-height: 100%; object-fit: contain;">`;
+            }
+        } catch (error) {
+            // 썸네일 로드 실패는 무시
+        }
+    }
+
+    async selectSequence(datasetName, split, index) {
+        try {
+            // 이전 선택 해제
+            document.querySelectorAll('.sequence-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+
+            // 현재 선택 표시
+            const selectedItem = document.querySelector(`.sequence-item:nth-child(${index + 1})`);
+            if (selectedItem) {
+                selectedItem.classList.add('selected');
+            }
+
+            // 시퀀스 데이터 로드
+            this.elements.placeholder.textContent = '시퀀스 로딩 중...';
+            
+            const response = await fetch(`${this.apiBaseUrl}/datasets/${encodeURIComponent(datasetName)}/${split}/sequence/${index}`);
+            if (!response.ok) {
+                throw new Error(`시퀀스 로드 실패: ${response.status}`);
+            }
+
+            const sequenceData = await response.json();
+            this.currentSequence = sequenceData;
+
+            // 이미지 데이터 변환
+            this.images = sequenceData.images.map((img, i) => ({
+                dataUrl: `data:image/png;base64,${img}`,
+                name: `frame_${i.toString().padStart(3, '0')}.png`
+            }));
+
+            this.currentFrame = 0;
+            this.updateUI();
+            this.updateImageCount();
+            this.createTimelineScale();
+            this.enableControls();
+
+            // 메타데이터 표시
+            this.updateDatasetMetaInfo(sequenceData.metadata);
+
+        } catch (error) {
+            this.showError(`시퀀스 선택 중 오류 발생: ${error.message}`);
+        }
+    }
+
+    updateDatasetMetaInfo(metadata) {
+        if (!metadata) return;
+        
+        const info = [];
+        if (metadata.dataset_name) info.push(`데이터셋: ${metadata.dataset_name}`);
+        if (metadata.split) info.push(`Split: ${metadata.split}`);
+        if (metadata.index !== undefined) info.push(`인덱스: ${metadata.index}`);
+        
+        this.elements.datasetMetaInfo.textContent = info.join(' | ');
+    }
+
+    showError(message) {
+        this.elements.datasetError.textContent = message;
+        this.elements.datasetError.style.display = 'block';
+    }
+
+    hideError() {
+        this.elements.datasetError.style.display = 'none';
+    }
+
+    async saveToServer() {
+        try {
+            const data = {
+                tags: this.tags,
+                totalFrames: this.images.length,
+                fps: this.fps,
+                exportTime: new Date().toISOString(),
+                version: '1.0',
+                datasetName: this.currentDataset?.name || null,
+                splitName: this.elements.datasetSplit.value || null
+            };
+
+            const response = await fetch(`${this.apiBaseUrl}/tagging/${this.sessionId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                throw new Error(`저장 실패: ${response.status}`);
+            }
+
+            const result = await response.json();
+            alert(`서버에 저장되었습니다. 세션 ID: ${this.sessionId}`);
+
+        } catch (error) {
+            alert(`서버 저장 중 오류 발생: ${error.message}`);
+        }
+    }
+
+    // 기존 메서드들 (로컬 업로드, 재생 제어, 태깅 등)
     async handleImageUpload(files) {
         if (files.length === 0) return;
 
-        // 파일을 배열로 변환하고 이름으로 정렬
         const fileArray = Array.from(files).sort((a, b) => a.name.localeCompare(b.name));
         
         this.images = [];
         this.elements.imageCount.textContent = `${fileArray.length}개 이미지 로딩 중...`;
 
-        // 이미지들을 Data URL로 변환
         for (let file of fileArray) {
             const dataUrl = await this.fileToDataUrl(file);
             this.images.push({
@@ -152,6 +439,7 @@ class RobotActionTagger {
         this.updateImageCount();
         this.createTimelineScale();
         this.enableControls();
+        this.elements.datasetMetaInfo.textContent = '로컬 업로드 모드';
     }
 
     fileToDataUrl(file) {
@@ -165,16 +453,13 @@ class RobotActionTagger {
     updateUI() {
         if (this.images.length === 0) return;
 
-        // 현재 이미지 표시
         this.elements.currentImage.src = this.images[this.currentFrame].dataUrl;
         this.elements.currentImage.style.display = 'block';
         this.elements.placeholder.style.display = 'none';
 
-        // 프레임 정보 업데이트
         this.elements.frameNumber.textContent = `프레임: ${this.currentFrame + 1} / ${this.images.length}`;
         this.elements.currentTime.textContent = `시간: ${(this.currentFrame / this.fps).toFixed(1)}초`;
 
-        // 타임라인 인디케이터 위치 업데이트
         this.updateFrameIndicator();
     }
 
@@ -217,6 +502,7 @@ class RobotActionTagger {
         this.elements.nextBtn.disabled = false;
         this.elements.addTagBtn.disabled = false;
         this.elements.exportBtn.disabled = false;
+        this.elements.saveToServerBtn.disabled = false;
     }
 
     togglePlay() {
@@ -284,7 +570,7 @@ class RobotActionTagger {
         if (this.images.length === 0) return;
 
         const startFrame = this.currentFrame;
-        const endFrame = Math.min(startFrame + Math.floor(this.fps * 2), this.images.length - 1); // 2초 기본 길이
+        const endFrame = Math.min(startFrame + Math.floor(this.fps * 2), this.images.length - 1);
 
         this.editTag({
             id: Date.now(),
@@ -334,7 +620,6 @@ class RobotActionTagger {
         this.selectedTag.endFrame = endFrame;
         this.selectedTag.description = this.elements.tagDescription.value.trim();
 
-        // 새 태그인 경우 추가
         if (!this.tags.find(t => t.id === this.selectedTag.id)) {
             this.tags.push(this.selectedTag);
         }
@@ -459,7 +744,9 @@ class RobotActionTagger {
             totalFrames: this.images.length,
             fps: this.fps,
             exportTime: new Date().toISOString(),
-            version: '1.0'
+            version: '1.0',
+            datasetName: this.currentDataset?.name || null,
+            splitName: this.elements.datasetSplit.value || null
         };
 
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -497,50 +784,9 @@ class RobotActionTagger {
             alert('파일을 가져오는 중 오류가 발생했습니다: ' + error.message);
         }
     }
-
-    showError(message) {
-        const errorContainer = document.getElementById('error-container');
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'error-message';
-        errorDiv.textContent = message;
-        
-        // 기존 에러 메시지 제거
-        while (errorContainer.firstChild) {
-            errorContainer.removeChild(errorContainer.firstChild);
-        }
-        
-        errorContainer.appendChild(errorDiv);
-        
-        // 5초 후 자동으로 사라짐
-        setTimeout(() => {
-            if (errorDiv.parentNode === errorContainer) {
-                errorDiv.style.animation = 'fadeOut 0.3s ease-out';
-                setTimeout(() => {
-                    if (errorDiv.parentNode === errorContainer) {
-                        errorContainer.removeChild(errorDiv);
-                    }
-                }, 300);
-            }
-        }, 5000);
-    }
 }
 
 // 애플리케이션 시작
 document.addEventListener('DOMContentLoaded', () => {
-    new RobotActionTagger();
+    new RobotActionTaggerWithDatasets();
 }); 
-
-// 애니메이션 스타일 추가
-const style = document.createElement('style');
-style.textContent = `
-@keyframes fadeOut {
-    from {
-        opacity: 1;
-        transform: translate(-50%, 0);
-    }
-    to {
-        opacity: 0;
-        transform: translate(-50%, -100%);
-    }
-}`;
-document.head.appendChild(style); 

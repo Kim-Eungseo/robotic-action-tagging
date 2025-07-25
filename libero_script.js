@@ -1,6 +1,6 @@
 class LiberoActionTagger {
     constructor() {
-        this.apiBaseUrl = 'http://localhost:8002/api/libero';
+        this.apiBaseUrl = 'http://localhost:8001/api/libero';
         this.currentEpisode = null;
         this.currentFrameIndex = 0;
         this.isPlaying = false;
@@ -20,7 +20,7 @@ class LiberoActionTagger {
     }
 
     generateSessionId() {
-        return `libero_${Date.now().toString(36)}_${Math.random().toString(36).substr(2)}`;
+        return `libero_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
     }
 
     initializeElements() {
@@ -196,7 +196,9 @@ class LiberoActionTagger {
     async loadTasks() {
         try {
             const response = await fetch(`${this.apiBaseUrl}/tasks`);
-            if (!response.ok) return;
+            if (!response.ok) {
+                throw new Error(`태스크 로드 실패: ${response.status}`);
+            }
 
             this.tasks = await response.json();
             

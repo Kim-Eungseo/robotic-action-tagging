@@ -10,7 +10,7 @@ import subprocess
 
 def check_dependencies():
     """필요한 의존성 패키지들이 설치되어 있는지 확인"""
-    required_packages = ["fastapi", "uvicorn", "datasets", "pillow", "numpy"]
+    required_packages = ["fastapi", "uvicorn", "datasets", "numpy", "PIL"]
 
     missing_packages = []
     for package in required_packages:
